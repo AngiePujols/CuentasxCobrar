@@ -1,0 +1,676 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Plus, Edit, Trash2, Search, Filter, TrendingUp, DollarSign, FileText, Activity, Loader2 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { ApiService } from "@/lib/api"
+
+interface AsientoContable {
+  id: number
+  fecha: string
+  descripcion: string
+  debe: number
+  haber: number
+  referencia: string
+  estado: string
+}
+
+export default function AsientosContablesPage() {
+  const [asientos, setAsientos] = useState<AsientoContable[]>([])
+  const [filteredAsientos, setFilteredAsientos] = useState<AsientoContable[]>([])
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [editingAsiento, setEditingAsiento] = useState<AsientoContable | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const { toast } = useToast()
+
+  // Cargar datos desde la API
+  useEffect(() => {
+    loadAsientos()
+  }, [])
+
+  const loadAsientos = async () => {
+    try {
+      setLoading(true)
+      const data = await ApiService.getAsientosContables()
+      setAsientos(data)
+      setFilteredAsientos(data)
+    } catch (error) {
+      console.error("Error loading asientos:", error)
+      toast({
+        title: "❌ Error",
+        description: "No se pudieron cargar los asientos contables.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Filtrar asientos
+  useEffect(() => {
+    let filtered = asientos.filter(
+      (asiento) =>
+        asiento.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        asiento.referencia.toLowerCase().includes(searchTerm.toLowerCase()),
+    )
+
+    if (dateFrom) {
+      filtered = filtered.filter((asiento) => asiento.fecha >= dateFrom)
+    }
+    if (dateTo) {
+      filtered = filtered.filter((asiento) => asiento.fecha <= dateTo)
+    }
+
+    setFilteredAsientos(filtered)
+  }, [asientos, searchTerm, dateFrom, dateTo])
+
+  const handleCreate = async (formData: FormData) => {
+    try {
+      setSubmitting(true)
+      const newAsiento = {
+        fecha: formData.get("fecha") as string,
+        descripcion: formData.get("descripcion") as string,
+        debe: Number.parseFloat(formData.get("debe") as string) || 0,
+        haber: Number.parseFloat(formData.get("haber") as string) || 0,
+        referencia: formData.get("referencia") as string,
+        estado: "Activo",
+      }
+
+      await ApiService.createAsientoContable(newAsiento)
+      await loadAsientos() // Recargar datos
+      setIsCreateOpen(false)
+      toast({
+        title: "✨ Asiento creado",
+        description: "El asiento contable se ha creado exitosamente.",
+      })
+    } catch (error) {
+      console.error("Error creating asiento:", error)
+      toast({
+        title: "❌ Error",
+        description: "No se pudo crear el asiento contable.",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleEdit = async (formData: FormData) => {
+    if (!editingAsiento) return
+
+    try {
+      setSubmitting(true)
+      const updatedAsiento = {
+        ...editingAsiento,
+        fecha: formData.get("fecha") as string,
+        descripcion: formData.get("descripcion") as string,
+        debe: Number.parseFloat(formData.get("debe") as string) || 0,
+        haber: Number.parseFloat(formData.get("haber") as string) || 0,
+        referencia: formData.get("referencia") as string,
+      }
+
+      await ApiService.updateAsientoContable(editingAsiento.id, updatedAsiento)
+      await loadAsientos() // Recargar datos
+      setIsEditOpen(false)
+      setEditingAsiento(null)
+      toast({
+        title: "🎉 Asiento actualizado",
+        description: "El asiento contable se ha actualizado exitosamente.",
+      })
+    } catch (error) {
+      console.error("Error updating asiento:", error)
+      toast({
+        title: "❌ Error",
+        description: "No se pudo actualizar el asiento contable.",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteId) return
+
+    try {
+      setSubmitting(true)
+      await ApiService.deleteAsientoContable(deleteId)
+      await loadAsientos() // Recargar datos
+      setDeleteId(null)
+      toast({
+        title: "🗑️ Asiento eliminado",
+        description: "El asiento contable se ha eliminado exitosamente.",
+      })
+    } catch (error) {
+      console.error("Error deleting asiento:", error)
+      toast({
+        title: "❌ Error",
+        description: "No se pudo eliminar el asiento contable.",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const openEdit = (asiento: AsientoContable) => {
+    setEditingAsiento(asiento)
+    setIsEditOpen(true)
+  }
+
+  // Calcular estadísticas
+  const totalDebe = asientos.reduce((sum, a) => sum + a.debe, 0)
+  const totalHaber = asientos.reduce((sum, a) => sum + a.haber, 0)
+  const balance = totalDebe - totalHaber
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          <p className="text-slate-600">Cargando asientos contables...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="p-8 space-y-8">
+        {/* Header */}
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 rounded-3xl blur-3xl"></div>
+          <div className="relative bg-white/70 backdrop-blur-sm rounded-3xl p-8 border border-white/20 shadow-xl">
+            <div className="flex items-center gap-4">
+              <div className="p-4 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl shadow-lg">
+                <FileText className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                  Asientos Contables
+                </h1>
+                <p className="text-slate-600 text-lg">Gestiona los movimientos contables del sistema</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <Card className="relative overflow-hidden bg-gradient-to-br from-green-50 to-emerald-50 border-green-200/50 shadow-lg hover:shadow-xl transition-all duration-300">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-green-400/20 to-emerald-400/20 rounded-full -translate-y-10 translate-x-10"></div>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-green-600 text-sm font-medium">Total Debe</p>
+                  <p className="text-2xl font-bold text-green-700">${totalDebe.toLocaleString()}</p>
+                </div>
+                <div className="p-3 bg-green-500 rounded-xl shadow-lg">
+                  <TrendingUp className="h-6 w-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden bg-gradient-to-br from-red-50 to-rose-50 border-red-200/50 shadow-lg hover:shadow-xl transition-all duration-300">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-red-400/20 to-rose-400/20 rounded-full -translate-y-10 translate-x-10"></div>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-red-600 text-sm font-medium">Total Haber</p>
+                  <p className="text-2xl font-bold text-red-700">${totalHaber.toLocaleString()}</p>
+                </div>
+                <div className="p-3 bg-red-500 rounded-xl shadow-lg">
+                  <DollarSign className="h-6 w-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200/50 shadow-lg hover:shadow-xl transition-all duration-300">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-blue-400/20 to-indigo-400/20 rounded-full -translate-y-10 translate-x-10"></div>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-600 text-sm font-medium">Balance</p>
+                  <p className={`text-2xl font-bold ${balance >= 0 ? "text-blue-700" : "text-red-700"}`}>
+                    ${Math.abs(balance).toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-3 bg-blue-500 rounded-xl shadow-lg">
+                  <Activity className="h-6 w-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200/50 shadow-lg hover:shadow-xl transition-all duration-300">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-purple-400/20 to-violet-400/20 rounded-full -translate-y-10 translate-x-10"></div>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-purple-600 text-sm font-medium">Total Asientos</p>
+                  <p className="text-2xl font-bold text-purple-700">{asientos.length}</p>
+                </div>
+                <div className="p-3 bg-purple-500 rounded-xl shadow-lg">
+                  <FileText className="h-6 w-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filtros */}
+        <Card className="bg-white/70 backdrop-blur-sm border-white/20 shadow-xl">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-3 text-xl">
+              <div className="p-2 bg-gradient-to-r from-slate-500 to-slate-600 rounded-lg">
+                <Filter className="h-5 w-5 text-white" />
+              </div>
+              Filtros de búsqueda
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="search" className="text-sm font-medium text-slate-700">
+                  Buscar
+                </Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                  <Input
+                    id="search"
+                    placeholder="Descripción o referencia..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dateFrom" className="text-sm font-medium text-slate-700">
+                  Fecha desde
+                </Label>
+                <Input
+                  id="dateFrom"
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dateTo" className="text-sm font-medium text-slate-700">
+                  Fecha hasta
+                </Label>
+                <Input
+                  id="dateTo"
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchTerm("")
+                    setDateFrom("")
+                    setDateTo("")
+                  }}
+                  className="w-full bg-white/50 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                >
+                  Limpiar filtros
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Botón crear */}
+        <div className="flex justify-between items-center">
+          <div></div>
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white shadow-lg hover:shadow-xl transition-all duration-300 px-6 py-3 rounded-xl">
+                <Plus className="h-5 w-5 mr-2" />
+                Nuevo Asiento
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-white/95 backdrop-blur-sm border-white/20 shadow-2xl max-w-2xl">
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                  Crear Nuevo Asiento Contable
+                </DialogTitle>
+              </DialogHeader>
+              <form action={handleCreate} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="fecha" className="text-sm font-medium text-slate-700">
+                    Fecha
+                  </Label>
+                  <Input
+                    id="fecha"
+                    name="fecha"
+                    type="date"
+                    required
+                    className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="descripcion" className="text-sm font-medium text-slate-700">
+                    Descripción
+                  </Label>
+                  <Input
+                    id="descripcion"
+                    name="descripcion"
+                    required
+                    className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="debe" className="text-sm font-medium text-slate-700">
+                      Debe
+                    </Label>
+                    <Input
+                      id="debe"
+                      name="debe"
+                      type="number"
+                      step="0.01"
+                      className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="haber" className="text-sm font-medium text-slate-700">
+                      Haber
+                    </Label>
+                    <Input
+                      id="haber"
+                      name="haber"
+                      type="number"
+                      step="0.01"
+                      className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="referencia" className="text-sm font-medium text-slate-700">
+                    Referencia
+                  </Label>
+                  <Input
+                    id="referencia"
+                    name="referencia"
+                    required
+                    className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                  />
+                </div>
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsCreateOpen(false)}
+                    className="px-6"
+                    disabled={submitting}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 px-6"
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creando...
+                      </>
+                    ) : (
+                      "Crear Asiento"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* Tabla */}
+        <Card className="bg-white/70 backdrop-blur-sm border-white/20 shadow-xl">
+          <CardContent className="p-0">
+            <div className="overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                    <TableHead className="font-semibold text-slate-700 min-w-[120px]">Fecha</TableHead>
+                    <TableHead className="font-semibold text-slate-700 min-w-[200px]">Descripción</TableHead>
+                    <TableHead className="font-semibold text-slate-700 min-w-[120px]">Referencia</TableHead>
+                    <TableHead className="text-right font-semibold text-slate-700 min-w-[120px]">Debe</TableHead>
+                    <TableHead className="text-right font-semibold text-slate-700 min-w-[120px]">Haber</TableHead>
+                    <TableHead className="font-semibold text-slate-700 min-w-[100px]">Estado</TableHead>
+                    <TableHead className="text-right font-semibold text-slate-700 min-w-[120px]">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAsientos.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-slate-500">
+                        No se encontraron asientos contables
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredAsientos.map((asiento, index) => (
+                      <TableRow
+                        key={asiento.id}
+                        className={`hover:bg-slate-50/50 transition-colors ${index % 2 === 0 ? "bg-white/30" : "bg-slate-50/30"}`}
+                      >
+                        <TableCell className="font-medium">{new Date(asiento.fecha).toLocaleDateString()}</TableCell>
+                        <TableCell>{asiento.descripcion}</TableCell>
+                        <TableCell>
+                          <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                            {asiento.referencia}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-green-600">
+                          {asiento.debe > 0 ? `$${asiento.debe.toLocaleString()}` : "-"}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-red-600">
+                          {asiento.haber > 0 ? `$${asiento.haber.toLocaleString()}` : "-"}
+                        </TableCell>
+                        <TableCell>
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                            {asiento.estado}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openEdit(asiento)}
+                              className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 transition-colors"
+                              disabled={submitting}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setDeleteId(asiento.id)}
+                              className="hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-colors"
+                              disabled={submitting}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Modal de edición */}
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <DialogContent className="bg-white/95 backdrop-blur-sm border-white/20 shadow-2xl max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                Editar Asiento Contable
+              </DialogTitle>
+            </DialogHeader>
+            {editingAsiento && (
+              <form action={handleEdit} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-fecha" className="text-sm font-medium text-slate-700">
+                    Fecha
+                  </Label>
+                  <Input
+                    id="edit-fecha"
+                    name="fecha"
+                    type="date"
+                    defaultValue={editingAsiento.fecha}
+                    required
+                    className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-descripcion" className="text-sm font-medium text-slate-700">
+                    Descripción
+                  </Label>
+                  <Input
+                    id="edit-descripcion"
+                    name="descripcion"
+                    defaultValue={editingAsiento.descripcion}
+                    required
+                    className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-debe" className="text-sm font-medium text-slate-700">
+                      Debe
+                    </Label>
+                    <Input
+                      id="edit-debe"
+                      name="debe"
+                      type="number"
+                      step="0.01"
+                      defaultValue={editingAsiento.debe}
+                      className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-haber" className="text-sm font-medium text-slate-700">
+                      Haber
+                    </Label>
+                    <Input
+                      id="edit-haber"
+                      name="haber"
+                      type="number"
+                      step="0.01"
+                      defaultValue={editingAsiento.haber}
+                      className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-referencia" className="text-sm font-medium text-slate-700">
+                    Referencia
+                  </Label>
+                  <Input
+                    id="edit-referencia"
+                    name="referencia"
+                    defaultValue={editingAsiento.referencia}
+                    required
+                    className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                  />
+                </div>
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsEditOpen(false)}
+                    className="px-6"
+                    disabled={submitting}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 px-6"
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Actualizando...
+                      </>
+                    ) : (
+                      "Actualizar"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal de confirmación de eliminación */}
+        <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
+          <AlertDialogContent className="bg-white/95 backdrop-blur-sm border-white/20 shadow-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-xl font-bold text-slate-800">¿Estás seguro?</AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-600">
+                Esta acción no se puede deshacer. El asiento contable será eliminado permanentemente.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="px-6" disabled={submitting}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                className="bg-red-500 hover:bg-red-600 px-6"
+                disabled={submitting}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Eliminando...
+                  </>
+                ) : (
+                  "Eliminar"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </div>
+  )
+}
