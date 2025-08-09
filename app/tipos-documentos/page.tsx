@@ -1,11 +1,24 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,167 +28,274 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Edit, Trash2, Search, Filter, FileType, Activity, CheckCircle, XCircle, Loader2 } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { ApiService } from "@/lib/api"
+} from "@/components/ui/alert-dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Search,
+  Filter,
+  FileType,
+  Activity,
+  CheckCircle,
+  XCircle,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { ApiService } from "@/lib/api";
 
 interface TipoDocumento {
-  id: number
-  codigo: string
-  nombre: string
-  descripcion: string
-  estado: string
-  fechaCreacion: string
+  id: number;
+  nombre: string;
+  cuentaContable: string;
+  estado: boolean;
 }
 
 export default function TiposDocumentosPage() {
-  const [tipos, setTipos] = useState<TipoDocumento[]>([])
-  const [filteredTipos, setFilteredTipos] = useState<TipoDocumento[]>([])
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [isEditOpen, setIsEditOpen] = useState(false)
-  const [deleteId, setDeleteId] = useState<number | null>(null)
-  const [editingTipo, setEditingTipo] = useState<TipoDocumento | null>(null)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [estadoFilter, setEstadoFilter] = useState("todos")
-  const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
-  const { toast } = useToast()
+  const [tipos, setTipos] = useState<TipoDocumento[]>([]);
+  const [filteredTipos, setFilteredTipos] = useState<TipoDocumento[]>([]);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [editingTipo, setEditingTipo] = useState<TipoDocumento | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [estadoFilter, setEstadoFilter] = useState("todos");
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [createForm, setCreateForm] = useState({
+    nombre: "",
+    cuentaContable: "",
+    estado: "",
+  });
+  const [editForm, setEditForm] = useState({
+    nombre: "",
+    cuentaContable: "",
+    estado: "",
+  });
+  const { toast } = useToast();
 
   // Cargar datos desde la API
   useEffect(() => {
-    loadTipos()
-  }, [])
+    loadTipos();
+  }, []);
 
   const loadTipos = async () => {
     try {
-      setLoading(true)
-      const data = await ApiService.getTiposDocumentos()
-      setTipos(data)
-      setFilteredTipos(data)
+      setLoading(true);
+      const data = await ApiService.getTiposDocumentos();
+      setTipos(data);
+      setFilteredTipos(data);
     } catch (error) {
-      console.error("Error loading tipos:", error)
+      console.error("Error loading tipos:", error);
       toast({
         title: "❌ Error",
         description: "No se pudieron cargar los tipos de documentos.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   // Filtrar tipos
   useEffect(() => {
     let filtered = tipos.filter(
       (tipo) =>
-        tipo.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        tipo.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        tipo.descripcion.toLowerCase().includes(searchTerm.toLowerCase()),
-    )
+        (tipo.nombre?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (tipo.cuentaContable?.toLowerCase() || "").includes(
+          searchTerm.toLowerCase()
+        )
+    );
 
     if (estadoFilter && estadoFilter !== "todos") {
-      filtered = filtered.filter((tipo) => tipo.estado === estadoFilter)
+      if (estadoFilter === "activo") {
+        filtered = filtered.filter((tipo) => tipo.estado === true);
+      } else if (estadoFilter === "inactivo") {
+        filtered = filtered.filter((tipo) => tipo.estado === false);
+      }
     }
 
-    setFilteredTipos(filtered)
-  }, [tipos, searchTerm, estadoFilter])
+    setFilteredTipos(filtered);
+    setCurrentPage(1); // Reset to first page when filters change
+  }, [tipos, searchTerm, estadoFilter]);
 
-  const handleCreate = async (formData: FormData) => {
+  // Calcular datos paginados
+  const totalPages = Math.ceil(filteredTipos.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedTipos = filteredTipos.slice(startIndex, endIndex);
+
+  // Funciones de navegación
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const nextPage = () => goToPage(currentPage + 1);
+  const prevPage = () => goToPage(currentPage - 1);
+
+  // Función para limpiar formulario de crear
+  const resetCreateForm = () => {
+    setCreateForm({
+      nombre: "",
+      cuentaContable: "",
+      estado: "",
+    });
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validación básica
+    if (
+      !createForm.nombre ||
+      !createForm.cuentaContable ||
+      !createForm.estado
+    ) {
+      toast({
+        title: "❌ Error de validación",
+        description: "Todos los campos son requeridos.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      setSubmitting(true)
+      setSubmitting(true);
       const newTipo = {
-        codigo: formData.get("codigo") as string,
-        nombre: formData.get("nombre") as string,
-        descripcion: formData.get("descripcion") as string,
-        estado: formData.get("estado") as string,
-      }
+        id: 0, // Se autogenera en el backend
+        nombre: createForm.nombre.trim(),
+        cuentaContable: createForm.cuentaContable.trim(),
+        estado: createForm.estado === "true",
+      };
 
-      await ApiService.createTipoDocumento(newTipo)
-      await loadTipos() // Recargar datos
-      setIsCreateOpen(false)
+      console.log("Datos a enviar:", newTipo);
+
+      await ApiService.createTipoDocumento(newTipo);
+      await loadTipos(); // Recargar datos
+      setIsCreateOpen(false);
+      resetCreateForm(); // Limpiar formulario
       toast({
         title: "✨ Tipo de documento creado",
         description: "El tipo de documento se ha creado exitosamente.",
-      })
+      });
     } catch (error) {
-      console.error("Error creating tipo:", error)
+      console.error("Error creating tipo:", error);
       toast({
         title: "❌ Error",
         description: "No se pudo crear el tipo de documento.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
-  const handleEdit = async (formData: FormData) => {
-    if (!editingTipo) return
+  // Función para limpiar formulario de editar
+  const resetEditForm = () => {
+    setEditForm({
+      nombre: "",
+      cuentaContable: "",
+      estado: "",
+    });
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTipo) return;
+
+    // Validación básica
+    if (!editForm.nombre || !editForm.cuentaContable || !editForm.estado) {
+      toast({
+        title: "❌ Error de validación",
+        description: "Todos los campos son requeridos.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
-      setSubmitting(true)
+      setSubmitting(true);
       const updatedTipo = {
-        ...editingTipo,
-        codigo: formData.get("codigo") as string,
-        nombre: formData.get("nombre") as string,
-        descripcion: formData.get("descripcion") as string,
-        estado: formData.get("estado") as string,
-      }
+        id: editingTipo.id,
+        nombre: editForm.nombre.trim(),
+        cuentaContable: editForm.cuentaContable.trim(),
+        estado: editForm.estado === "true",
+      };
 
-      await ApiService.updateTipoDocumento(editingTipo.id, updatedTipo)
-      await loadTipos() // Recargar datos
-      setIsEditOpen(false)
-      setEditingTipo(null)
+      console.log("Datos a actualizar:", updatedTipo);
+
+      await ApiService.updateTipoDocumento(editingTipo.id, updatedTipo);
+      await loadTipos(); // Recargar datos
+      setIsEditOpen(false);
+      setEditingTipo(null);
+      resetEditForm();
       toast({
         title: "🎉 Tipo de documento actualizado",
         description: "El tipo de documento se ha actualizado exitosamente.",
-      })
+      });
     } catch (error) {
-      console.error("Error updating tipo:", error)
+      console.error("Error updating tipo:", error);
       toast({
         title: "❌ Error",
         description: "No se pudo actualizar el tipo de documento.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   const handleDelete = async () => {
-    if (!deleteId) return
+    if (!deleteId) return;
 
     try {
-      setSubmitting(true)
-      await ApiService.deleteTipoDocumento(deleteId)
-      await loadTipos() // Recargar datos
-      setDeleteId(null)
+      setSubmitting(true);
+      await ApiService.deleteTipoDocumento(deleteId);
+      await loadTipos(); // Recargar datos
+      setDeleteId(null);
       toast({
         title: "🗑️ Tipo de documento eliminado",
         description: "El tipo de documento se ha eliminado exitosamente.",
-      })
+      });
     } catch (error) {
-      console.error("Error deleting tipo:", error)
+      console.error("Error deleting tipo:", error);
       toast({
         title: "❌ Error",
         description: "No se pudo eliminar el tipo de documento.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   const openEdit = (tipo: TipoDocumento) => {
-    setEditingTipo(tipo)
-    setIsEditOpen(true)
-  }
+    setEditingTipo(tipo);
+    setEditForm({
+      nombre: tipo.nombre || "",
+      cuentaContable: tipo.cuentaContable || "",
+      estado: tipo.estado ? "true" : "false",
+    });
+    setIsEditOpen(true);
+  };
 
-  const tiposActivos = tipos.filter((t) => t.estado === "Activo").length
-  const tiposInactivos = tipos.filter((t) => t.estado === "Inactivo").length
+  const tiposActivos = tipos.filter((t) => t.estado === true).length;
+  const tiposInactivos = tipos.filter((t) => t.estado === false).length;
+  const totalTipos = tipos.length;
 
   if (loading) {
     return (
@@ -185,7 +305,7 @@ export default function TiposDocumentosPage() {
           <p className="text-slate-600">Cargando tipos de documentos...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -203,7 +323,9 @@ export default function TiposDocumentosPage() {
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
                   Tipos de Documentos
                 </h1>
-                <p className="text-slate-600 text-lg">Configura los tipos de documentos del sistema</p>
+                <p className="text-slate-600 text-lg">
+                  Configura los tipos de documentos del sistema
+                </p>
               </div>
             </div>
           </div>
@@ -216,8 +338,12 @@ export default function TiposDocumentosPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-green-600 text-sm font-medium">Tipos Activos</p>
-                  <p className="text-2xl font-bold text-green-700">{tiposActivos}</p>
+                  <p className="text-green-600 text-sm font-medium">
+                    Tipos Activos
+                  </p>
+                  <p className="text-2xl font-bold text-green-700">
+                    {tiposActivos}
+                  </p>
                 </div>
                 <div className="p-3 bg-green-500 rounded-xl shadow-lg">
                   <CheckCircle className="h-6 w-6 text-white" />
@@ -231,8 +357,12 @@ export default function TiposDocumentosPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-red-600 text-sm font-medium">Tipos Inactivos</p>
-                  <p className="text-2xl font-bold text-red-700">{tiposInactivos}</p>
+                  <p className="text-red-600 text-sm font-medium">
+                    Tipos Inactivos
+                  </p>
+                  <p className="text-2xl font-bold text-red-700">
+                    {tiposInactivos}
+                  </p>
                 </div>
                 <div className="p-3 bg-red-500 rounded-xl shadow-lg">
                   <XCircle className="h-6 w-6 text-white" />
@@ -246,8 +376,12 @@ export default function TiposDocumentosPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-purple-600 text-sm font-medium">Total Tipos</p>
-                  <p className="text-2xl font-bold text-purple-700">{tipos.length}</p>
+                  <p className="text-purple-600 text-sm font-medium">
+                    Total Tipos
+                  </p>
+                  <p className="text-2xl font-bold text-purple-700">
+                    {tipos.length}
+                  </p>
                 </div>
                 <div className="p-3 bg-purple-500 rounded-xl shadow-lg">
                   <Activity className="h-6 w-6 text-white" />
@@ -270,14 +404,17 @@ export default function TiposDocumentosPage() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="search" className="text-sm font-medium text-slate-700">
+                <Label
+                  htmlFor="search"
+                  className="text-sm font-medium text-slate-700"
+                >
                   Buscar
                 </Label>
                 <div className="relative">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                   <Input
                     id="search"
-                    placeholder="Código, nombre o descripción..."
+                    placeholder="Nombre o cuenta contable..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10 bg-white border-2 border-slate-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg"
@@ -285,7 +422,10 @@ export default function TiposDocumentosPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="estado" className="text-sm font-medium text-slate-700">
+                <Label
+                  htmlFor="estado"
+                  className="text-sm font-medium text-slate-700"
+                >
                   Estado
                 </Label>
                 <Select value={estadoFilter} onValueChange={setEstadoFilter}>
@@ -294,8 +434,8 @@ export default function TiposDocumentosPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos los estados</SelectItem>
-                    <SelectItem value="Activo">Activo</SelectItem>
-                    <SelectItem value="Inactivo">Inactivo</SelectItem>
+                    <SelectItem value="activo">Activo</SelectItem>
+                    <SelectItem value="inactivo">Inactivo</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -303,8 +443,8 @@ export default function TiposDocumentosPage() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setSearchTerm("")
-                    setEstadoFilter("todos")
+                    setSearchTerm("");
+                    setEstadoFilter("todos");
                   }}
                   className="w-full bg-white/50 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
                 >
@@ -318,7 +458,13 @@ export default function TiposDocumentosPage() {
         {/* Botón crear */}
         <div className="flex justify-between items-center">
           <div></div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog
+            open={isCreateOpen}
+            onOpenChange={(open) => {
+              setIsCreateOpen(open);
+              if (!open) resetCreateForm();
+            }}
+          >
             <DialogTrigger asChild>
               <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300 px-6 py-3 rounded-xl">
                 <Plus className="h-5 w-5 mr-2" />
@@ -331,51 +477,67 @@ export default function TiposDocumentosPage() {
                   Crear Nuevo Tipo de Documento
                 </DialogTitle>
               </DialogHeader>
-              <form action={handleCreate} className="space-y-6">
+              <form onSubmit={handleCreate} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="codigo" className="text-sm font-medium text-slate-700">
-                    Código
-                  </Label>
-                  <Input
-                    id="codigo"
-                    name="codigo"
-                    required
-                    className="bg-white border-2 border-slate-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="nombre" className="text-sm font-medium text-slate-700">
+                  <Label
+                    htmlFor="nombre"
+                    className="text-sm font-medium text-slate-700"
+                  >
                     Nombre
                   </Label>
                   <Input
                     id="nombre"
                     name="nombre"
+                    value={createForm.nombre}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, nombre: e.target.value })
+                    }
                     required
                     className="bg-white border-2 border-slate-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="descripcion" className="text-sm font-medium text-slate-700">
-                    Descripción
+                  <Label
+                    htmlFor="cuentaContable"
+                    className="text-sm font-medium text-slate-700"
+                  >
+                    Cuenta Contable
                   </Label>
                   <Input
-                    id="descripcion"
-                    name="descripcion"
+                    id="cuentaContable"
+                    name="cuentaContable"
+                    value={createForm.cuentaContable}
+                    onChange={(e) =>
+                      setCreateForm({
+                        ...createForm,
+                        cuentaContable: e.target.value,
+                      })
+                    }
                     required
                     className="bg-white border-2 border-slate-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="estado" className="text-sm font-medium text-slate-700">
+                  <Label
+                    htmlFor="estado"
+                    className="text-sm font-medium text-slate-700"
+                  >
                     Estado
                   </Label>
-                  <Select name="estado" defaultValue="Activo">
+                  <Select
+                    name="estado"
+                    value={createForm.estado}
+                    onValueChange={(value) =>
+                      setCreateForm({ ...createForm, estado: value })
+                    }
+                    required
+                  >
                     <SelectTrigger className="bg-white border-2 border-slate-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg">
-                      <SelectValue />
+                      <SelectValue placeholder="Seleccionar estado" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Activo">Activo</SelectItem>
-                      <SelectItem value="Inactivo">Inactivo</SelectItem>
+                      <SelectItem value="true">Activo</SelectItem>
+                      <SelectItem value="false">Inactivo</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -383,7 +545,10 @@ export default function TiposDocumentosPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setIsCreateOpen(false)}
+                    onClick={() => {
+                      setIsCreateOpen(false);
+                      resetCreateForm();
+                    }}
                     className="px-6"
                     disabled={submitting}
                   >
@@ -416,51 +581,68 @@ export default function TiposDocumentosPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-                    <TableHead className="font-semibold text-slate-700 min-w-[100px]">Código</TableHead>
-                    <TableHead className="font-semibold text-slate-700 min-w-[150px]">Nombre</TableHead>
-                    <TableHead className="font-semibold text-slate-700 min-w-[250px]">Descripción</TableHead>
-                    <TableHead className="font-semibold text-slate-700 min-w-[120px]">Estado</TableHead>
-                    <TableHead className="font-semibold text-slate-700 min-w-[140px]">Fecha Creación</TableHead>
-                    <TableHead className="text-right font-semibold text-slate-700 min-w-[120px]">Acciones</TableHead>
+                    <TableHead className="font-semibold text-slate-700 min-w-[80px]">
+                      ID
+                    </TableHead>
+                    <TableHead className="font-semibold text-slate-700 min-w-[200px]">
+                      Nombre
+                    </TableHead>
+                    <TableHead className="font-semibold text-slate-700 min-w-[200px]">
+                      Cuenta Contable
+                    </TableHead>
+                    <TableHead className="font-semibold text-slate-700 min-w-[120px]">
+                      Estado
+                    </TableHead>
+                    <TableHead className="text-right font-semibold text-slate-700 min-w-[120px]">
+                      Acciones
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTipos.length === 0 ? (
+                  {paginatedTipos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+                      <TableCell
+                        colSpan={5}
+                        className="text-center py-8 text-slate-500"
+                      >
                         No se encontraron tipos de documentos
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredTipos.map((tipo, index) => (
+                    paginatedTipos.map((tipo, index) => (
                       <TableRow
                         key={tipo.id}
-                        className={`hover:bg-slate-50/50 transition-colors ${index % 2 === 0 ? "bg-white/30" : "bg-slate-50/30"}`}
+                        className={`hover:bg-slate-50/50 transition-colors ${
+                          index % 2 === 0 ? "bg-white/30" : "bg-slate-50/30"
+                        }`}
                       >
                         <TableCell>
                           <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-bold">
-                            {tipo.codigo}
+                            {tipo.id}
                           </span>
                         </TableCell>
-                        <TableCell className="font-medium">{tipo.nombre}</TableCell>
-                        <TableCell className="text-slate-600">{tipo.descripcion}</TableCell>
+                        <TableCell className="font-medium">
+                          {tipo.nombre || "N/A"}
+                        </TableCell>
+                        <TableCell className="text-slate-600">
+                          {tipo.cuentaContable || "N/A"}
+                        </TableCell>
                         <TableCell>
                           <span
                             className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${
-                              tipo.estado === "Activo"
+                              tipo.estado
                                 ? "bg-green-100 text-green-700 border-green-200"
                                 : "bg-red-100 text-red-700 border-red-200"
                             }`}
                           >
-                            {tipo.estado === "Activo" ? (
+                            {tipo.estado ? (
                               <CheckCircle className="w-3 h-3 mr-1" />
                             ) : (
                               <XCircle className="w-3 h-3 mr-1" />
                             )}
-                            {tipo.estado}
+                            {tipo.estado ? "Activo" : "Inactivo"}
                           </span>
                         </TableCell>
-                        <TableCell>{new Date(tipo.fechaCreacion).toLocaleDateString()}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button
@@ -489,11 +671,95 @@ export default function TiposDocumentosPage() {
                 </TableBody>
               </Table>
             </div>
+            {/* Paginación */}
+            {filteredTipos.length > 0 && (
+              <Card className="bg-white/70 backdrop-blur-sm border-white/20 shadow-xl">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm text-slate-600">
+                      <span>
+                        Mostrando {startIndex + 1} a{" "}
+                        {Math.min(endIndex, filteredTipos.length)} de{" "}
+                        {filteredTipos.length} resultados
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={prevPage}
+                        disabled={currentPage === 1}
+                        className="bg-white/50 border-slate-200 hover:bg-slate-50"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Anterior
+                      </Button>
+
+                      <div className="flex items-center gap-1">
+                        {Array.from(
+                          { length: Math.min(5, totalPages) },
+                          (_, i) => {
+                            let pageNum;
+                            if (totalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (currentPage <= 3) {
+                              pageNum = i + 1;
+                            } else if (currentPage >= totalPages - 2) {
+                              pageNum = totalPages - 4 + i;
+                            } else {
+                              pageNum = currentPage - 2 + i;
+                            }
+
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={
+                                  currentPage === pageNum
+                                    ? "default"
+                                    : "outline"
+                                }
+                                size="sm"
+                                onClick={() => goToPage(pageNum)}
+                                className={
+                                  currentPage === pageNum
+                                    ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                                    : "bg-white/50 border-slate-200 hover:bg-slate-50"
+                                }
+                              >
+                                {pageNum}
+                              </Button>
+                            );
+                          }
+                        )}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={nextPage}
+                        disabled={currentPage === totalPages}
+                        className="bg-white/50 border-slate-200 hover:bg-slate-50"
+                      >
+                        Siguiente
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </CardContent>
         </Card>
 
         {/* Modal de edición */}
-        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <Dialog open={isEditOpen} onOpenChange={(open) => {
+          setIsEditOpen(open)
+          if (!open) {
+            resetEditForm()
+            setEditingTipo(null)
+          }
+        }}>
           <DialogContent className="bg-white/95 backdrop-blur-sm border-white/20 shadow-2xl max-w-2xl">
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
@@ -501,54 +767,67 @@ export default function TiposDocumentosPage() {
               </DialogTitle>
             </DialogHeader>
             {editingTipo && (
-              <form action={handleEdit} className="space-y-6">
+              <form onSubmit={handleEdit} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-codigo" className="text-sm font-medium text-slate-700">
-                    Código
-                  </Label>
-                  <Input
-                    id="edit-codigo"
-                    name="codigo"
-                    defaultValue={editingTipo.codigo}
-                    required
-                    className="bg-white border-2 border-slate-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-nombre" className="text-sm font-medium text-slate-700">
+                  <Label
+                    htmlFor="edit-nombre"
+                    className="text-sm font-medium text-slate-700"
+                  >
                     Nombre
                   </Label>
                   <Input
                     id="edit-nombre"
                     name="nombre"
-                    defaultValue={editingTipo.nombre}
+                    value={editForm.nombre}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, nombre: e.target.value })
+                    }
                     required
                     className="bg-white border-2 border-slate-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-descripcion" className="text-sm font-medium text-slate-700">
-                    Descripción
+                  <Label
+                    htmlFor="edit-cuentaContable"
+                    className="text-sm font-medium text-slate-700"
+                  >
+                    Cuenta Contable
                   </Label>
                   <Input
-                    id="edit-descripcion"
-                    name="descripcion"
-                    defaultValue={editingTipo.descripcion}
+                    id="edit-cuentaContable"
+                    name="cuentaContable"
+                    value={editForm.cuentaContable}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        cuentaContable: e.target.value,
+                      })
+                    }
                     required
                     className="bg-white border-2 border-slate-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-estado" className="text-sm font-medium text-slate-700">
+                  <Label
+                    htmlFor="edit-estado"
+                    className="text-sm font-medium text-slate-700"
+                  >
                     Estado
                   </Label>
-                  <Select name="estado" defaultValue={editingTipo.estado}>
+                  <Select
+                    name="estado"
+                    value={editForm.estado}
+                    onValueChange={(value) =>
+                      setEditForm({ ...editForm, estado: value })
+                    }
+                    required
+                  >
                     <SelectTrigger className="bg-white border-2 border-slate-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Activo">Activo</SelectItem>
-                      <SelectItem value="Inactivo">Inactivo</SelectItem>
+                      <SelectItem value="true">Activo</SelectItem>
+                      <SelectItem value="false">Inactivo</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -556,7 +835,11 @@ export default function TiposDocumentosPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setIsEditOpen(false)}
+                    onClick={() => {
+                      setIsEditOpen(false)
+                      resetEditForm()
+                      setEditingTipo(null)
+                    }}
                     className="px-6"
                     disabled={submitting}
                   >
@@ -583,12 +866,18 @@ export default function TiposDocumentosPage() {
         </Dialog>
 
         {/* Modal de confirmación de eliminación */}
-        <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialog
+          open={deleteId !== null}
+          onOpenChange={() => setDeleteId(null)}
+        >
           <AlertDialogContent className="bg-white/95 backdrop-blur-sm border-white/20 shadow-2xl">
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-xl font-bold text-slate-800">¿Estás seguro?</AlertDialogTitle>
+              <AlertDialogTitle className="text-xl font-bold text-slate-800">
+                ¿Estás seguro?
+              </AlertDialogTitle>
               <AlertDialogDescription className="text-slate-600">
-                Esta acción no se puede deshacer. El tipo de documento será eliminado permanentemente.
+                Esta acción no se puede deshacer. El tipo de documento será
+                eliminado permanentemente.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -614,5 +903,5 @@ export default function TiposDocumentosPage() {
         </AlertDialog>
       </div>
     </div>
-  )
+  );
 }

@@ -13,6 +13,12 @@ const navigation = [
     color: "from-blue-500 to-cyan-500",
   },
   {
+    name: "Asiento CXC",
+    href: "/asiento-cxc",
+    icon: FileText,
+    color: "from-indigo-500 to-purple-500",
+  },
+  {
     name: "Tipos de Documentos",
     href: "/tipos-documentos",
     icon: FileType,
@@ -94,19 +100,7 @@ export function Sidebar() {
         </div>
       </nav>
 
-      <div className="absolute bottom-6 left-6 right-6">
-        <div className="bg-gradient-to-r from-slate-800/50 to-slate-700/50 backdrop-blur-sm rounded-xl p-4 border border-slate-600/30">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-              <span className="text-white font-semibold text-sm">AD</span>
-            </div>
-            <div>
-              <p className="text-white text-sm font-medium">Administrador</p>
-              <p className="text-slate-400 text-xs">Sistema activo</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      
     </div>
   )
 }

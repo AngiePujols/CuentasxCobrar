@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +31,8 @@ import {
   Eye,
   Edit,
   Trash2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ApiService } from "@/lib/api";
@@ -59,6 +61,10 @@ export default function ClientesPage() {
   const [cedulaError, setCedulaError] = useState("");
   const [editCedulaError, setEditCedulaError] = useState("");
   const { toast } = useToast();
+
+  // Form refs
+  const createFormRef = useRef<HTMLFormElement>(null);
+  const editFormRef = useRef<HTMLFormElement>(null);
 
   // Cargar datos desde la API
   useEffect(() => {
@@ -148,7 +154,11 @@ export default function ClientesPage() {
     }
   };
 
-  const handleCreate = async (formData: FormData) => {
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault(); // Prevent form submission and page refresh
+    
+    const formData = new FormData(e.currentTarget);
+    
     try {
       setSubmitting(true);
       const estadoValue = formData.get("estado") as string;
@@ -166,17 +176,23 @@ export default function ClientesPage() {
       }
 
       const newCliente = {
-        nombre: formData.get("nombre") as string,
-        cedula: cedulaValue,
-        limiteCredito:
-          Number.parseFloat(formData.get("limiteCredito") as string) || 0,
+        nombre: (formData.get("nombre") as string).trim(),
+        cedula: cedulaValue.replace(/[-\s]/g, ''), // Clean cedula
+        limiteCredito: Number.parseFloat(formData.get("limiteCredito") as string) || 0,
         estado: getEstadoForAPI(estadoValue),
       };
 
+      console.log("Sending to Create API:", newCliente); // Debug log
       await ApiService.createCliente(newCliente);
       await loadClientes(); // Recargar datos
       setIsCreateOpen(false);
       setCedulaError("");
+      
+      // Reset form safely
+      if (createFormRef.current) {
+        createFormRef.current.reset();
+      }
+      
       toast({
         title: "✨ Cliente creado",
         description: "El cliente se ha creado exitosamente.",
@@ -196,8 +212,11 @@ export default function ClientesPage() {
     }
   };
 
-  const handleEdit = async (formData: FormData) => {
+  const handleEdit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault(); // Prevent form submission and page refresh
     if (!editingCliente) return;
+
+    const formData = new FormData(e.currentTarget);
 
     try {
       setSubmitting(true);
@@ -216,13 +235,14 @@ export default function ClientesPage() {
       }
 
       const updatedCliente = {
-        nombre: formData.get("nombre") as string,
-        cedula: cedulaValue,
-        limiteCredito:
-          Number.parseFloat(formData.get("limiteCredito") as string) || 0,
-        estado: getEstadoForAPI(estadoValue),
+        id: editingCliente.id, // Include the ID as shown in the endpoint example
+        nombre: (formData.get("nombre") as string).trim(),
+        cedula: cedulaValue.replace(/[-\s]/g, ''), // Send clean cedula without hyphens
+        limiteCredito: Number.parseFloat(formData.get("limiteCredito") as string) || 0,
+        estado: getEstadoForAPI(estadoValue), // Convert to boolean as expected
       };
 
+      console.log("Sending to Edit API:", updatedCliente); // Debug log
       await ApiService.updateCliente(editingCliente.id, updatedCliente);
       await loadClientes(); // Recargar datos
       setIsEditOpen(false);
@@ -304,6 +324,63 @@ export default function ClientesPage() {
       // Prevent negative values
       e.target.value = '0';
     }
+  };
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredClientes.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentClientes = filteredClientes.slice(startIndex, endIndex);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, estadoFilter, filteredClientes.length]);
+
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const handleItemsPerPageChange = (value: string) => {
+    setItemsPerPage(Number(value));
+    setCurrentPage(1);
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5;
+    
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      const start = Math.max(1, currentPage - 2);
+      const end = Math.min(totalPages, start + maxVisiblePages - 1);
+      
+      if (start > 1) {
+        pages.push(1);
+        if (start > 2) pages.push('...');
+      }
+      
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      
+      if (end < totalPages) {
+        if (end < totalPages - 1) pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    
+    return pages;
   };
 
   if (loading) {
@@ -466,12 +543,38 @@ export default function ClientesPage() {
 
         {/* Botón crear y Tabla de clientes */}
         <div className="space-y-4 md:space-y-6">
-          <div className="flex justify-end">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-medium text-slate-700">Mostrar:</Label>
+                <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+                  <SelectTrigger className="w-20 bg-white border-2 border-slate-300 focus:border-orange-500">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-slate-600">
+                  de {filteredClientes.length} clientes
+                </span>
+              </div>
+            </div>
+
             <Dialog
               open={isCreateOpen}
               onOpenChange={(open) => {
                 setIsCreateOpen(open);
-                if (!open) setCedulaError("");
+                if (!open) {
+                  setCedulaError("");
+                  // Reset form when dialog closes
+                  if (createFormRef.current) {
+                    createFormRef.current.reset();
+                  }
+                }
               }}
             >
               <DialogTrigger asChild>
@@ -487,7 +590,7 @@ export default function ClientesPage() {
                   </DialogTitle>
                 </DialogHeader>
                 <div className="overflow-y-auto max-h-[calc(90vh-120px)] p-1">
-                  <form action={handleCreate} className="space-y-6">
+                  <form ref={createFormRef} onSubmit={handleCreate} className="space-y-6">
                     <div className="space-y-2">
                       <Label
                         htmlFor="nombre"
@@ -620,47 +723,47 @@ export default function ClientesPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto overflow-y-auto max-h-[600px]">
+              <div className="overflow-x-auto">
                 <table className="w-full min-w-[600px]">
-                  <thead className="sticky top-0 bg-white/90 backdrop-blur-sm border-b border-slate-200">
+                  <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <th className="text-left py-3 px-4 font-medium text-slate-700 bg-white/90">
+                      <th className="text-left py-4 px-4 font-medium text-slate-700">
                         Nombre
                       </th>
-                      <th className="text-left py-3 px-4 font-medium text-slate-700 bg-white/90">
+                      <th className="text-left py-4 px-4 font-medium text-slate-700">
                         Cédula
                       </th>
-                      <th className="text-left py-3 px-4 font-medium text-slate-700 bg-white/90">
+                      <th className="text-left py-4 px-4 font-medium text-slate-700">
                         Límite de Crédito
                       </th>
-                      <th className="text-left py-3 px-4 font-medium text-slate-700 bg-white/90">
+                      <th className="text-left py-4 px-4 font-medium text-slate-700">
                         Estado
                       </th>
-                      <th className="text-right py-3 px-4 font-medium text-slate-700 bg-white/90">
+                      <th className="text-right py-4 px-4 font-medium text-slate-700">
                         Acciones
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredClientes.length === 0 ? (
+                    {currentClientes.length === 0 ? (
                       <tr>
-                        <td
-                          colSpan={5}
-                          className="py-8 text-center text-slate-500"
-                        >
-                          No se encontraron clientes
+                        <td colSpan={5} className="py-12 text-center text-slate-500">
+                          <div className="flex flex-col items-center gap-2">
+                            <Users className="h-12 w-12 text-slate-300" />
+                            <p>No se encontraron clientes</p>
+                          </div>
                         </td>
                       </tr>
                     ) : (
-                      filteredClientes.map((cliente, index) => (
+                      currentClientes.map((cliente, index) => (
                         <tr
                           key={cliente.id}
                           className={`border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${
-                            index % 2 === 0 ? "bg-white/30" : "bg-slate-50/30"
+                            index % 2 === 0 ? "bg-white/50" : "bg-slate-50/30"
                           }`}
                         >
                           <td className="py-4 px-4">
-                            <div className="font-medium text-slate-900 truncate max-w-[200px]">
+                            <div className="font-medium text-slate-900">
                               {cliente.nombre}
                             </div>
                           </td>
@@ -672,7 +775,7 @@ export default function ClientesPage() {
                           </td>
                           <td className="py-4 px-4">
                             <span
-                              className={`inline-flex px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                              className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
                                 getEstadoDisplay(cliente.estado) === "Activo"
                                   ? "bg-green-100 text-green-800"
                                   : "bg-red-100 text-red-800"
@@ -682,28 +785,28 @@ export default function ClientesPage() {
                             </span>
                           </td>
                           <td className="py-4 px-4">
-                            <div className="flex items-center justify-end gap-1">
+                            <div className="flex items-center justify-end gap-2">
                               <Button
                                 variant="ghost"
-                                size="icon"
+                                size="sm"
                                 onClick={() => openView(cliente)}
-                                className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 shrink-0"
+                                className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
                               <Button
                                 variant="ghost"
-                                size="icon"
+                                size="sm"
                                 onClick={() => openEdit(cliente)}
-                                className="h-8 w-8 text-orange-600 hover:text-orange-700 hover:bg-orange-50 shrink-0"
+                                className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
                               >
                                 <Edit className="h-4 w-4" />
                               </Button>
                               <Button
                                 variant="ghost"
-                                size="icon"
+                                size="sm"
                                 onClick={() => setDeleteId(cliente.id)}
-                                className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 shrink-0"
+                                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -717,6 +820,61 @@ export default function ClientesPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <Card className="bg-white/70 backdrop-blur-sm border-white/20 shadow-xl">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-slate-600">
+                    Mostrando {startIndex + 1} a {Math.min(endIndex, filteredClientes.length)} de{" "}
+                    {filteredClientes.length} resultados
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    
+                    <div className="flex items-center gap-1">
+                      {getPageNumbers().map((page, index) => (
+                        <Button
+                          key={index}
+                          variant={page === currentPage ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => typeof page === 'number' && handlePageChange(page)}
+                          disabled={page === '...'}
+                          className={`h-8 w-8 p-0 ${
+                            page === currentPage
+                              ? "bg-orange-500 hover:bg-orange-600 text-white"
+                              : ""
+                          }`}
+                        >
+                          {page}
+                        </Button>
+                      ))}
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Edit Dialog */}
@@ -738,7 +896,7 @@ export default function ClientesPage() {
             </DialogHeader>
             {editingCliente && (
               <div className="overflow-y-auto max-h-[calc(90vh-120px)] p-1">
-                <form action={handleEdit} className="space-y-6">
+                <form ref={editFormRef} onSubmit={handleEdit} className="space-y-6">
                   <div className="space-y-2">
                     <Label
                       htmlFor="edit-nombre"
@@ -751,6 +909,7 @@ export default function ClientesPage() {
                       name="nombre"
                       defaultValue={editingCliente.nombre}
                       required
+                      placeholder="Ingrese el nombre del cliente"
                       className="bg-white border-2 border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 rounded-lg"
                     />
                   </div>
@@ -780,6 +939,7 @@ export default function ClientesPage() {
                         {editCedulaError}
                       </p>
                     )}
+                    <p className="text-xs text-slate-500">Formato: 000-0000000-0 (cédula dominicana)</p>
                   </div>
 
                   <div className="space-y-2">

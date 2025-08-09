@@ -255,9 +255,20 @@ export class ApiService {
         );
       }
 
+      // Ensure the data structure matches the expected format
+      const updateData = {
+        id: data.id || id, // Include ID in the payload
+        nombre: data.nombre.trim(),
+        cedula: data.cedula.toString(), // Ensure cedula is string
+        limiteCredito: Number(data.limiteCredito) || 0,
+        estado: Boolean(data.estado), // Ensure estado is boolean
+      };
+
+      console.log("API Service - Sending update data:", updateData);
+
       return await this.request(`/Clientes/${id}`, {
         method: "PUT",
-        body: JSON.stringify(data),
+        body: JSON.stringify(updateData),
       });
     } catch (error) {
       console.error("Error updating cliente:", error);

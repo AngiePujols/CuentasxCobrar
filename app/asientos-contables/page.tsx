@@ -18,21 +18,20 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Edit, Trash2, Search, Filter, TrendingUp, DollarSign, FileText, Activity, Loader2 } from "lucide-react"
+import { Plus, Edit, Trash2, Search, Filter, TrendingUp, DollarSign, FileText, Activity, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ApiService } from "@/lib/api"
 
 interface AsientoContable {
   id: number
-  fecha: string
-  numeroComprobante: string
-  concepto: string
-  tipoDocumentoId: number
-  clienteId?: number
-  totalDebito: number
-  totalCredito: number
-  estado: string
-  fechaCreacion: string
+  nombre: string
+  clienteId: number
+  nombreCliente?: string
+  cuenta: string
+  tipoMovimiento: string
+  fechaAsiento: string
+  montoAsiento: number
+  estado: boolean
 }
 
 export default function AsientosContablesPage() {
@@ -47,6 +46,17 @@ export default function AsientosContablesPage() {
   const [dateTo, setDateTo] = useState("")
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
+  const [createForm, setCreateForm] = useState({
+    nombre: "",
+    clienteId: "",
+    cuenta: "",
+    tipoMovimiento: "",
+    fechaAsiento: "",
+    montoAsiento: "",
+    estado: ""
+  })
   const { toast } = useToast()
 
   // Cargar datos desde la API
@@ -76,46 +86,134 @@ export default function AsientosContablesPage() {
   useEffect(() => {
     let filtered = asientos.filter(
       (asiento) =>
-        (asiento?.concepto?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-        (asiento?.numeroComprobante?.toLowerCase() || "").includes(searchTerm.toLowerCase()),
+        (asiento?.cuenta?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (asiento?.nombre?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (asiento?.nombreCliente?.toLowerCase() || "").includes(searchTerm.toLowerCase()),
     )
 
     if (dateFrom) {
-      filtered = filtered.filter((asiento) => (asiento.fecha || "") >= dateFrom)
+      filtered = filtered.filter((asiento) => (asiento.fechaAsiento || "") >= dateFrom)
     }
     if (dateTo) {
-      filtered = filtered.filter((asiento) => (asiento.fecha || "") <= dateTo)
+      filtered = filtered.filter((asiento) => (asiento.fechaAsiento || "") <= dateTo)
     }
 
     setFilteredAsientos(filtered)
+    setCurrentPage(1) // Reset to first page when filters change
   }, [asientos, searchTerm, dateFrom, dateTo])
 
-  const handleCreate = async (formData: FormData) => {
+  // Calcular datos paginados
+  const totalPages = Math.ceil(filteredAsientos.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedAsientos = filteredAsientos.slice(startIndex, endIndex)
+
+  // Funciones de navegación
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page)
+    }
+  }
+
+  const nextPage = () => goToPage(currentPage + 1)
+  const prevPage = () => goToPage(currentPage - 1)
+
+  // Función para limpiar formulario de crear
+  const resetCreateForm = () => {
+    setCreateForm({
+      nombre: "",
+      clienteId: "",
+      cuenta: "",
+      tipoMovimiento: "",
+      fechaAsiento: "",
+      montoAsiento: "",
+      estado: ""
+    })
+  }
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    // Validación básica
+    if (!createForm.nombre || !createForm.clienteId || !createForm.cuenta || 
+        !createForm.tipoMovimiento || !createForm.fechaAsiento || !createForm.montoAsiento || !createForm.estado) {
+      toast({
+        title: "❌ Error de validación",
+        description: "Todos los campos son requeridos.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validación de números
+    const clienteId = Number(createForm.clienteId)
+    const montoAsiento = Number.parseFloat(createForm.montoAsiento)
+    
+    if (isNaN(clienteId) || clienteId <= 0) {
+      toast({
+        title: "❌ Error de validación",
+        description: "El ID del cliente debe ser un número válido mayor a 0.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (isNaN(montoAsiento) || montoAsiento <= 0) {
+      toast({
+        title: "❌ Error de validación",
+        description: "El monto debe ser un número válido mayor a 0.",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       setSubmitting(true)
+      // Convertir fecha a formato ISO con tiempo (UTC)
+      const fechaISO = new Date(createForm.fechaAsiento + 'T12:00:00.000Z').toISOString()
+      
       const newAsiento = {
-        fecha: formData.get("fecha") as string,
-        numeroComprobante: formData.get("numeroComprobante") as string,
-        concepto: formData.get("concepto") as string,
-        tipoDocumentoId: Number(formData.get("tipoDocumentoId")) || 1,
-        clienteId: formData.get("clienteId") ? Number(formData.get("clienteId")) : undefined,
-        totalDebito: Number.parseFloat(formData.get("totalDebito") as string) || 0,
-        totalCredito: Number.parseFloat(formData.get("totalCredito") as string) || 0,
-        estado: "Borrador",
+        id: 0, // Se autogenera en el backend
+        nombre: createForm.nombre.trim(),
+        clienteId: clienteId,
+        nombreCliente: "", // Se llena automáticamente en el backend
+        cuenta: createForm.cuenta.trim(),
+        tipoMovimiento: createForm.tipoMovimiento,
+        fechaAsiento: fechaISO,
+        montoAsiento: montoAsiento,
+        estado: createForm.estado === "true",
       }
+
+      console.log("Datos a enviar:", newAsiento)
+      console.log("Datos a enviar (JSON):", JSON.stringify(newAsiento, null, 2))
 
       await ApiService.createAsientoContable(newAsiento)
       await loadAsientos() // Recargar datos
       setIsCreateOpen(false)
+      resetCreateForm() // Limpiar formulario
       toast({
         title: "✨ Asiento creado",
         description: "El asiento contable se ha creado exitosamente.",
       })
     } catch (error) {
       console.error("Error creating asiento:", error)
+      let errorMessage = "No se pudo crear el asiento contable."
+      
+      if (error instanceof Error) {
+        if (error.message.includes("Failed to fetch")) {
+          errorMessage = "Error de conexión. Verifique que el servidor esté ejecutándose."
+        } else if (error.message.includes("400")) {
+          errorMessage = "Datos inválidos. Verifique que todos los campos estén correctos."
+        } else if (error.message.includes("500")) {
+          errorMessage = "Error interno del servidor. Intente nuevamente."
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
       toast({
-        title: "❌ Error",
-        description: "No se pudo crear el asiento contable.",
+        title: "❌ Error al crear asiento",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -130,13 +228,13 @@ export default function AsientosContablesPage() {
       setSubmitting(true)
       const updatedAsiento = {
         ...editingAsiento,
-        fecha: formData.get("fecha") as string,
-        numeroComprobante: formData.get("numeroComprobante") as string,
-        concepto: formData.get("concepto") as string,
-        tipoDocumentoId: Number(formData.get("tipoDocumentoId")) || editingAsiento.tipoDocumentoId,
-        clienteId: formData.get("clienteId") ? Number(formData.get("clienteId")) : editingAsiento.clienteId,
-        totalDebito: Number.parseFloat(formData.get("totalDebito") as string) || 0,
-        totalCredito: Number.parseFloat(formData.get("totalCredito") as string) || 0,
+        nombre: formData.get("nombre") as string,
+        clienteId: Number(formData.get("clienteId")) || editingAsiento.clienteId,
+        cuenta: formData.get("cuenta") as string,
+        tipoMovimiento: formData.get("tipoMovimiento") as string,
+        fechaAsiento: formData.get("fechaAsiento") as string,
+        montoAsiento: Number.parseFloat(formData.get("montoAsiento") as string) || 0,
+        estado: formData.get("estado") === "true",
       }
 
       await ApiService.updateAsientoContable(editingAsiento.id, updatedAsiento)
@@ -189,9 +287,9 @@ export default function AsientosContablesPage() {
   }
 
   // Calcular estadísticas
-  const totalDebito = asientos.reduce((sum, a) => sum + (a.totalDebito || 0), 0)
-  const totalCredito = asientos.reduce((sum, a) => sum + (a.totalCredito || 0), 0)
-  const balance = totalDebito - totalCredito
+  const totalMonto = asientos.reduce((sum, a) => sum + (a.montoAsiento || 0), 0)
+  const totalActivos = asientos.filter(a => a.estado).length
+  const totalInactivos = asientos.filter(a => !a.estado).length
 
   if (loading) {
     return (
@@ -232,11 +330,11 @@ export default function AsientosContablesPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-green-600 text-sm font-medium">Total Débito</p>
-                  <p className="text-2xl font-bold text-green-700">${totalDebito.toLocaleString()}</p>
+                  <p className="text-green-600 text-sm font-medium">Total Monto</p>
+                  <p className="text-2xl font-bold text-green-700">${totalMonto.toLocaleString()}</p>
                 </div>
                 <div className="p-3 bg-green-500 rounded-xl shadow-lg">
-                  <TrendingUp className="h-6 w-6 text-white" />
+                  <DollarSign className="h-6 w-6 text-white" />
                 </div>
               </div>
             </CardContent>
@@ -247,11 +345,11 @@ export default function AsientosContablesPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-red-600 text-sm font-medium">Total Crédito</p>
-                  <p className="text-2xl font-bold text-red-700">${totalCredito.toLocaleString()}</p>
+                  <p className="text-red-600 text-sm font-medium">Activos</p>
+                  <p className="text-2xl font-bold text-red-700">{totalActivos}</p>
                 </div>
                 <div className="p-3 bg-red-500 rounded-xl shadow-lg">
-                  <DollarSign className="h-6 w-6 text-white" />
+                  <TrendingUp className="h-6 w-6 text-white" />
                 </div>
               </div>
             </CardContent>
@@ -262,10 +360,8 @@ export default function AsientosContablesPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-blue-600 text-sm font-medium">Balance</p>
-                  <p className={`text-2xl font-bold ${balance >= 0 ? "text-blue-700" : "text-red-700"}`}>
-                    ${Math.abs(balance).toLocaleString()}
-                  </p>
+                  <p className="text-blue-600 text-sm font-medium">Inactivos</p>
+                  <p className="text-2xl font-bold text-blue-700">{totalInactivos}</p>
                 </div>
                 <div className="p-3 bg-blue-500 rounded-xl shadow-lg">
                   <Activity className="h-6 w-6 text-white" />
@@ -310,7 +406,7 @@ export default function AsientosContablesPage() {
                   <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                   <Input
                     id="search"
-                    placeholder="Concepto o número comprobante..."
+                    placeholder="Nombre, cuenta o cliente..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10 bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
@@ -361,7 +457,10 @@ export default function AsientosContablesPage() {
         {/* Botón crear */}
         <div className="flex justify-between items-center">
           <div></div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog open={isCreateOpen} onOpenChange={(open) => {
+          setIsCreateOpen(open)
+          if (!open) resetCreateForm()
+        }}>
             <DialogTrigger asChild>
               <Button className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white shadow-lg hover:shadow-xl transition-all duration-300 px-6 py-3 rounded-xl">
                 <Plus className="h-5 w-5 mr-2" />
@@ -374,72 +473,116 @@ export default function AsientosContablesPage() {
                   Crear Nuevo Asiento Contable
                 </DialogTitle>
               </DialogHeader>
-              <form action={handleCreate} className="space-y-6">
+              <form onSubmit={handleCreate} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="fecha" className="text-sm font-medium text-slate-700">
-                    Fecha
+                  <Label htmlFor="nombre" className="text-sm font-medium text-slate-700">
+                    Nombre del Asiento
                   </Label>
                   <Input
-                    id="fecha"
-                    name="fecha"
-                    type="date"
+                    id="nombre"
+                    name="nombre"
+                    value={createForm.nombre}
+                    onChange={(e) => setCreateForm({...createForm, nombre: e.target.value})}
                     required
                     className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="numeroComprobante" className="text-sm font-medium text-slate-700">
-                    Número de Comprobante
+                  <Label htmlFor="clienteId" className="text-sm font-medium text-slate-700">
+                    Cliente ID
                   </Label>
                   <Input
-                    id="numeroComprobante"
-                    name="numeroComprobante"
+                    id="clienteId"
+                    name="clienteId"
+                    type="number"
+                    value={createForm.clienteId}
+                    onChange={(e) => setCreateForm({...createForm, clienteId: e.target.value})}
                     required
                     className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="concepto" className="text-sm font-medium text-slate-700">
-                    Concepto
+                  <Label htmlFor="cuenta" className="text-sm font-medium text-slate-700">
+                    Cuenta
                   </Label>
                   <Input
-                    id="concepto"
-                    name="concepto"
+                    id="cuenta"
+                    name="cuenta"
+                    value={createForm.cuenta}
+                    onChange={(e) => setCreateForm({...createForm, cuenta: e.target.value})}
                     required
                     className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="totalDebito" className="text-sm font-medium text-slate-700">
-                      Total Débito
+                    <Label htmlFor="tipoMovimiento" className="text-sm font-medium text-slate-700">
+                      Tipo de Movimiento
+                    </Label>
+                    <Select name="tipoMovimiento" value={createForm.tipoMovimiento} onValueChange={(value) => setCreateForm({...createForm, tipoMovimiento: value})} required>
+                      <SelectTrigger className="bg-white border-2 border-slate-300 focus:border-blue-500">
+                        <SelectValue placeholder="Seleccionar tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Debito">Débito</SelectItem>
+                        <SelectItem value="Credito">Crédito</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fechaAsiento" className="text-sm font-medium text-slate-700">
+                      Fecha del Asiento
                     </Label>
                     <Input
-                      id="totalDebito"
-                      name="totalDebito"
+                      id="fechaAsiento"
+                      name="fechaAsiento"
+                      type="date"
+                      value={createForm.fechaAsiento}
+                      onChange={(e) => setCreateForm({...createForm, fechaAsiento: e.target.value})}
+                      required
+                      className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="montoAsiento" className="text-sm font-medium text-slate-700">
+                      Monto del Asiento
+                    </Label>
+                    <Input
+                      id="montoAsiento"
+                      name="montoAsiento"
                       type="number"
                       step="0.01"
+                      value={createForm.montoAsiento}
+                      onChange={(e) => setCreateForm({...createForm, montoAsiento: e.target.value})}
+                      required
                       className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="totalCredito" className="text-sm font-medium text-slate-700">
-                      Total Crédito
+                    <Label htmlFor="estado" className="text-sm font-medium text-slate-700">
+                      Estado
                     </Label>
-                    <Input
-                      id="totalCredito"
-                      name="totalCredito"
-                      type="number"
-                      step="0.01"
-                      className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
-                    />
+                    <Select name="estado" value={createForm.estado} onValueChange={(value) => setCreateForm({...createForm, estado: value})} required>
+                      <SelectTrigger className="bg-white border-2 border-slate-300 focus:border-blue-500">
+                        <SelectValue placeholder="Seleccionar estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="true">Activo</SelectItem>
+                        <SelectItem value="false">Inactivo</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <div className="flex justify-end gap-3 pt-4">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setIsCreateOpen(false)}
+                    onClick={() => {
+                      setIsCreateOpen(false)
+                      resetCreateForm()
+                    }}
                     className="px-6"
                     disabled={submitting}
                   >
@@ -472,44 +615,48 @@ export default function AsientosContablesPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                    <TableHead className="font-semibold text-slate-700 min-w-[150px]">Nombre</TableHead>
+                    <TableHead className="font-semibold text-slate-700 min-w-[150px]">Cliente</TableHead>
+                    <TableHead className="font-semibold text-slate-700 min-w-[120px]">Cuenta</TableHead>
+                    <TableHead className="font-semibold text-slate-700 min-w-[120px]">Tipo Movimiento</TableHead>
                     <TableHead className="font-semibold text-slate-700 min-w-[120px]">Fecha</TableHead>
-                    <TableHead className="font-semibold text-slate-700 min-w-[150px]">Comprobante</TableHead>
-                    <TableHead className="font-semibold text-slate-700 min-w-[200px]">Concepto</TableHead>
-                    <TableHead className="text-right font-semibold text-slate-700 min-w-[120px]">Débito</TableHead>
-                    <TableHead className="text-right font-semibold text-slate-700 min-w-[120px]">Crédito</TableHead>
+                    <TableHead className="text-right font-semibold text-slate-700 min-w-[120px]">Monto</TableHead>
                     <TableHead className="font-semibold text-slate-700 min-w-[100px]">Estado</TableHead>
                     <TableHead className="text-right font-semibold text-slate-700 min-w-[120px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAsientos.length === 0 ? (
+                  {paginatedAsientos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-slate-500">
+                      <TableCell colSpan={8} className="text-center py-8 text-slate-500">
                         No se encontraron asientos contables
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredAsientos.map((asiento, index) => (
+                    paginatedAsientos.map((asiento, index) => (
                       <TableRow
                         key={asiento.id}
                         className={`hover:bg-slate-50/50 transition-colors ${index % 2 === 0 ? "bg-white/30" : "bg-slate-50/30"}`}
                       >
-                        <TableCell className="font-medium">{new Date(asiento.fecha || new Date()).toLocaleDateString()}</TableCell>
+                        <TableCell className="font-medium">{asiento.nombre || "N/A"}</TableCell>
+                        <TableCell>{asiento.nombreCliente || "N/A"}</TableCell>
                         <TableCell>
                           <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-                            {asiento.numeroComprobante || "N/A"}
+                            {asiento.cuenta || "N/A"}
                           </span>
                         </TableCell>
-                        <TableCell>{asiento.concepto || "Sin concepto"}</TableCell>
+                        <TableCell>{asiento.tipoMovimiento || "N/A"}</TableCell>
+                        <TableCell className="font-medium">{new Date(asiento.fechaAsiento || new Date()).toLocaleDateString()}</TableCell>
                         <TableCell className="text-right font-semibold text-green-600">
-                          {(asiento.totalDebito || 0) > 0 ? `$${(asiento.totalDebito || 0).toLocaleString()}` : "-"}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-red-600">
-                          {(asiento.totalCredito || 0) > 0 ? `$${(asiento.totalCredito || 0).toLocaleString()}` : "-"}
+                          ${(asiento.montoAsiento || 0).toLocaleString()}
                         </TableCell>
                         <TableCell>
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
-                            {asiento.estado || "Sin estado"}
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${
+                            asiento.estado 
+                              ? "bg-green-100 text-green-700 border-green-200" 
+                              : "bg-red-100 text-red-700 border-red-200"
+                          }`}>
+                            {asiento.estado ? "Activo" : "Inactivo"}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
@@ -543,6 +690,76 @@ export default function AsientosContablesPage() {
           </CardContent>
         </Card>
 
+        {/* Paginación */}
+        {filteredAsientos.length > 0 && (
+          <Card className="bg-white/70 backdrop-blur-sm border-white/20 shadow-xl">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <span>
+                    Mostrando {startIndex + 1} a {Math.min(endIndex, filteredAsientos.length)} de {filteredAsientos.length} resultados
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={prevPage}
+                    disabled={currentPage === 1}
+                    className="bg-white/50 border-slate-200 hover:bg-slate-50"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                  
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum
+                      if (totalPages <= 5) {
+                        pageNum = i + 1
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i
+                      } else {
+                        pageNum = currentPage - 2 + i
+                      }
+                      
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => goToPage(pageNum)}
+                          className={
+                            currentPage === pageNum
+                              ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+                              : "bg-white/50 border-slate-200 hover:bg-slate-50"
+                          }
+                        >
+                          {pageNum}
+                        </Button>
+                      )
+                    })}
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={nextPage}
+                    disabled={currentPage === totalPages}
+                    className="bg-white/50 border-slate-200 hover:bg-slate-50"
+                  >
+                    Siguiente
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Modal de edición */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogContent className="bg-white/95 backdrop-blur-sm border-white/20 shadow-2xl max-w-2xl">
@@ -554,68 +771,99 @@ export default function AsientosContablesPage() {
             {editingAsiento && (
               <form action={handleEdit} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-fecha" className="text-sm font-medium text-slate-700">
-                    Fecha
+                  <Label htmlFor="edit-nombre" className="text-sm font-medium text-slate-700">
+                    Nombre del Asiento
                   </Label>
                   <Input
-                    id="edit-fecha"
-                    name="fecha"
-                    type="date"
-                    defaultValue={editingAsiento.fecha || ""}
+                    id="edit-nombre"
+                    name="nombre"
+                    defaultValue={editingAsiento.nombre || ""}
                     required
                     className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-numeroComprobante" className="text-sm font-medium text-slate-700">
-                    Número de Comprobante
+                  <Label htmlFor="edit-clienteId" className="text-sm font-medium text-slate-700">
+                    Cliente ID
                   </Label>
                   <Input
-                    id="edit-numeroComprobante"
-                    name="numeroComprobante"
-                    defaultValue={editingAsiento.numeroComprobante || ""}
+                    id="edit-clienteId"
+                    name="clienteId"
+                    type="number"
+                    defaultValue={editingAsiento.clienteId || 0}
                     required
                     className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-concepto" className="text-sm font-medium text-slate-700">
-                    Concepto
+                  <Label htmlFor="edit-cuenta" className="text-sm font-medium text-slate-700">
+                    Cuenta
                   </Label>
                   <Input
-                    id="edit-concepto"
-                    name="concepto"
-                    defaultValue={editingAsiento.concepto || ""}
+                    id="edit-cuenta"
+                    name="cuenta"
+                    defaultValue={editingAsiento.cuenta || ""}
                     required
                     className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="edit-totalDebito" className="text-sm font-medium text-slate-700">
-                      Total Débito
+                    <Label htmlFor="edit-tipoMovimiento" className="text-sm font-medium text-slate-700">
+                      Tipo de Movimiento
+                    </Label>
+                    <Select name="tipoMovimiento" defaultValue={editingAsiento.tipoMovimiento || ""} required>
+                      <SelectTrigger className="bg-white border-2 border-slate-300 focus:border-blue-500">
+                        <SelectValue placeholder="Seleccionar tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Debito">Débito</SelectItem>
+                        <SelectItem value="Credito">Crédito</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-fechaAsiento" className="text-sm font-medium text-slate-700">
+                      Fecha del Asiento
                     </Label>
                     <Input
-                      id="edit-totalDebito"
-                      name="totalDebito"
+                      id="edit-fechaAsiento"
+                      name="fechaAsiento"
+                      type="date"
+                      defaultValue={editingAsiento.fechaAsiento?.split('T')[0] || ""}
+                      required
+                      className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-montoAsiento" className="text-sm font-medium text-slate-700">
+                      Monto del Asiento
+                    </Label>
+                    <Input
+                      id="edit-montoAsiento"
+                      name="montoAsiento"
                       type="number"
                       step="0.01"
-                      defaultValue={editingAsiento.totalDebito || 0}
+                      defaultValue={editingAsiento.montoAsiento || 0}
+                      required
                       className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="edit-totalCredito" className="text-sm font-medium text-slate-700">
-                      Total Crédito
+                    <Label htmlFor="edit-estado" className="text-sm font-medium text-slate-700">
+                      Estado
                     </Label>
-                    <Input
-                      id="edit-totalCredito"
-                      name="totalCredito"
-                      type="number"
-                      step="0.01"
-                      defaultValue={editingAsiento.totalCredito || 0}
-                      className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
-                    />
+                    <Select name="estado" defaultValue={editingAsiento.estado ? "true" : "false"} required>
+                      <SelectTrigger className="bg-white border-2 border-slate-300 focus:border-blue-500">
+                        <SelectValue placeholder="Seleccionar estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="true">Activo</SelectItem>
+                        <SelectItem value="false">Inactivo</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <div className="flex justify-end gap-3 pt-4">
