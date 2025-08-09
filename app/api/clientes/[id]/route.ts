@@ -4,10 +4,11 @@ import { dataStore } from '@/lib/data-store'
 // GET /api/clientes/[id] - Get a specific client
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const { id: idParam } = await params
+    const id = parseInt(idParam)
     const cliente = dataStore.getCliente(id)
     
     if (!cliente) {
@@ -29,23 +30,18 @@ export async function GET(
 // PUT /api/clientes/[id] - Update a specific client
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const { id: idParam } = await params
+    const id = parseInt(idParam)
     const body = await request.json()
     
     const clienteData = {
       nombre: body.nombre,
-      email: body.email,
-      telefono: body.telefono,
-      direccion: body.direccion,
-      ciudad: body.ciudad,
-      estado: body.estado,
-      codigoPostal: body.codigoPostal,
-      estadoCliente: body.estadoCliente,
+      cedula: body.cedula,
       limiteCredito: Number(body.limiteCredito) || 0,
-      saldoPendiente: Number(body.saldoPendiente)
+      estado: body.estado
     }
     
     const updatedCliente = dataStore.updateCliente(id, clienteData)
@@ -69,10 +65,11 @@ export async function PUT(
 // DELETE /api/clientes/[id] - Delete a specific client
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const { id: idParam } = await params
+    const id = parseInt(idParam)
     
     const deleted = dataStore.deleteCliente(id)
     

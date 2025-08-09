@@ -4,10 +4,11 @@ import { dataStore } from '@/lib/data-store'
 // GET /api/asientos-contables/[id] - Get a specific accounting entry
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const { id: idParam } = await params
+    const id = parseInt(idParam)
     const asientoContable = dataStore.getAsientoContable(id)
     
     if (!asientoContable) {
@@ -29,10 +30,11 @@ export async function GET(
 // PUT /api/asientos-contables/[id] - Update a specific accounting entry
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const { id: idParam } = await params
+    const id = parseInt(idParam)
     const body = await request.json()
     
     const asientoData = {
@@ -67,10 +69,11 @@ export async function PUT(
 // DELETE /api/asientos-contables/[id] - Delete a specific accounting entry
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const { id: idParam } = await params
+    const id = parseInt(idParam)
     
     const deleted = dataStore.deleteAsientoContable(id)
     

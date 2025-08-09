@@ -4,6 +4,7 @@ export interface Cliente {
   cedula: string
   limiteCredito: number
   estado: string
+  fechaRegistro: string
 }
 
 export interface AsientoContable {

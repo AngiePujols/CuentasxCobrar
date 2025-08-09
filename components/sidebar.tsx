@@ -7,12 +7,6 @@ import { FileText, FileType, CreditCard, Users, Calculator, Sparkles } from "luc
 
 const navigation = [
   {
-    name: "Asientos Contables",
-    href: "/asientos-contables",
-    icon: Calculator,
-    color: "from-blue-500 to-cyan-500",
-  },
-  {
     name: "Asiento CXC",
     href: "/asiento-cxc",
     icon: FileText,

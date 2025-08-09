@@ -21,15 +21,9 @@ export async function POST(request: NextRequest) {
     
     const clienteData = {
       nombre: body.nombre,
-      email: body.email,
-      telefono: body.telefono,
-      direccion: body.direccion,
-      ciudad: body.ciudad,
-      estado: body.estado,
-      codigoPostal: body.codigoPostal,
-      estadoCliente: body.estadoCliente || 'Activo',
+      cedula: body.cedula,
       limiteCredito: Number(body.limiteCredito) || 0,
-      saldoPendiente: Number(body.saldoPendiente) || 0
+      estado: body.estado || 'Activo'
     }
 
     const newCliente = dataStore.createCliente(clienteData)

@@ -4,10 +4,11 @@ import { dataStore } from '@/lib/data-store'
 // GET /api/transacciones/[id] - Get a specific transaction
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const { id: idParam } = await params
+    const id = parseInt(idParam)
     const transaccion = dataStore.getTransaccion(id)
     
     if (!transaccion) {
@@ -29,10 +30,11 @@ export async function GET(
 // PUT /api/transacciones/[id] - Update a specific transaction
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const { id: idParam } = await params
+    const id = parseInt(idParam)
     const body = await request.json()
     
     const transaccionData = {
@@ -64,10 +66,11 @@ export async function PUT(
 // DELETE /api/transacciones/[id] - Delete a specific transaction
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const { id: idParam } = await params
+    const id = parseInt(idParam)
     
     const deleted = dataStore.deleteTransaccion(id)
     

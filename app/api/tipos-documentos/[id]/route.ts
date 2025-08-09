@@ -4,10 +4,11 @@ import { dataStore } from '@/lib/data-store'
 // GET /api/tipos-documentos/[id] - Get a specific document type
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const { id: idParam } = await params
+    const id = parseInt(idParam)
     const tipoDocumento = dataStore.getTipoDocumento(id)
     
     if (!tipoDocumento) {
@@ -29,10 +30,11 @@ export async function GET(
 // PUT /api/tipos-documentos/[id] - Update a specific document type
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const { id: idParam } = await params
+    const id = parseInt(idParam)
     const body = await request.json()
     
     const tipoData = {
@@ -64,10 +66,11 @@ export async function PUT(
 // DELETE /api/tipos-documentos/[id] - Delete a specific document type
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id)
+    const { id: idParam } = await params
+    const id = parseInt(idParam)
     
     const deleted = dataStore.deleteTipoDocumento(id)
     
